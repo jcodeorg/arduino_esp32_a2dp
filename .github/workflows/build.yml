@@ -45,9 +45,9 @@ jobs:
           --fqbn esp32:esp32:esp32 \
           --build-property "build.partitions=huge_app" \
           --build-property "upload.maximum_size=3145728" \
-          --build-property "board_build.flash_mode=dio" \
-          --build-property "board_build.flash_freq=40m" \
-          --build-property "board_build.flash_size=4MB" \
+          --build-property "build.flash_mode=dio" \
+          --build-property "build.flash_freq=40m" \
+          --build-property "build.flash_size=4MB" \
           --build-path build \
           firmware/firmware.ino
 
