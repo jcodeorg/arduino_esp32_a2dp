@@ -27,7 +27,7 @@ jobs:
       # ESP32 パッケージインデックスの更新と 2.0.14 のインストール
       - name: Install ESP32 Board Core (2.0.14)
         run: |
-          arduino-cli config init
+          arduino-cli config init --overwrite
           arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.14
@@ -38,27 +38,29 @@ jobs:
           mkdir -p ~/Arduino/libraries
           git clone https://github.com/pschatzmann/ESP32-A2DP.git ~/Arduino/libraries/ESP32-A2DP
 
-      # コンパイル実行 (出力先ディレクトリを build に明示固定)
+      # コンパイル実行 (output-dir を指定して構成ファイルを確実に生成)
       - name: Compile Sketch
         run: |
           arduino-cli compile \
-          --fqbn "esp32:esp32:esp32:PartitionScheme=huge_app,FlashMode=dio,FlashFreq=40,FlashSize=4M" \
-          --build-path build \
-          firmware/firmware.ino
+            --fqbn "esp32:esp32:esp32:PartitionScheme=huge_app,FlashMode=dio,FlashFreq=40,FlashSize=4M" \
+            --build-path build_temp \
+            --output-dir build \
+            firmware/firmware.ino
 
-      # build 配下のファイル一覧出力は不要のため削除
-
-      # ビルド生成物を所定の名前にリネーム（存在する場合のみ）
+      # ビルド生成物をシンプルな名前にリネーム（3種類のバイナリを全て整理）
       - name: Normalize artifact filenames
         run: |
-          if [ -f build/firmware.ino.bin ]; then
-            mv build/firmware.ino.bin build/firmware.bin
+          if [ -f build/firmware.ino.bootloader.bin ]; then
+            mv build/firmware.ino.bootloader.bin build/bootloader.bin
           fi
           if [ -f build/firmware.ino.partitions.bin ]; then
             mv build/firmware.ino.partitions.bin build/partitions.bin
           fi
+          if [ -f build/firmware.ino.bin ]; then
+            mv build/firmware.ino.bin build/firmware.bin
+          fi
 
-      # 通常の Artifacts 保存 (build フォルダ内を保存)
+      # 通常の Artifacts 保存 (bootloader.bin, partitions.bin, firmware.bin が含まれる)
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
