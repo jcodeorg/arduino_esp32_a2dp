@@ -1,0 +1,2 @@
+# arduino_esp32_a2dp
+arduino版esp32_a2dp Bluetoothスピーカー
