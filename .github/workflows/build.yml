@@ -38,30 +38,27 @@ jobs:
           mkdir -p ~/Arduino/libraries
           git clone https://github.com/pschatzmann/ESP32-A2DP.git ~/Arduino/libraries/ESP32-A2DP
 
-      # コンパイル実行
+      # コンパイル実行 (出力先ディレクトリを build に明示固定)
       - name: Compile Sketch
         run: |
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
             --build-property "build.partitions=huge_app" \
             --build-property "upload.maximum_size=3145728" \
+            --output-dir build \
             firmware/firmware.ino
 
-      # 通常の Artifacts 保存
+      # 通常の Artifacts 保存 (build フォルダ内を保存)
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: esp32-a2dp-firmware
-          path: |
-            firmware/build/esp32.esp32.esp32/*.bin
+          path: build/*.bin
 
       # GitHub Release の自動作成 & アセット添付 (タグ Push 時のみ)
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            firmware/build/esp32.esp32.esp32/firmware.ino.bin
-            firmware/build/esp32.esp32.esp32/firmware.ino.bootloader.bin
-            firmware/build/esp32.esp32.esp32/firmware.ino.partitions.bin
+          files: build/*.bin
           generate_release_notes: true
