@@ -52,7 +52,8 @@ jobs:
       - name: Write build file list
         run: |
           echo "Build directory listing for $(date)" > build/file_list.txt
-          ls -la build >> build/file_list.txt
+          # 再帰的にディレクトリ構造を含めて一覧を出力（build/ 以下を相対パスで表示）
+          find build -print | sed 's|^build/||' | sort >> build/file_list.txt
 
       # 通常の Artifacts 保存 (build フォルダ内を保存)
       - name: Upload Build Artifacts
