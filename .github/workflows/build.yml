@@ -32,9 +32,11 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.14
 
-      # 依存ライブラリのインストール
-      - name: Install ESP32-A2DP library
-        run: arduino-cli lib install "ESP32-A2DP"
+      # ESP32-A2DP ライブラリを GitHub から直接インストール
+      - name: Install ESP32-A2DP library from GitHub
+        run: |
+          mkdir -p ~/Arduino/libraries
+          git clone https://github.com/pschatzmann/ESP32-A2DP.git ~/Arduino/libraries/ESP32-A2DP
 
       # コンパイル実行
       - name: Compile Sketch
