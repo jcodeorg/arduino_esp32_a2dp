@@ -11,7 +11,7 @@ void setup() {
         .data_in_num = I2S_PIN_NO_CHANGE
     };
     a2dp_sink.set_pin_config(my_pin_config);
-    a2dp_sink.start("MyESP32Speaker");
+    a2dp_sink.start("BTSpeaker3");
 }
 
 void loop() {
