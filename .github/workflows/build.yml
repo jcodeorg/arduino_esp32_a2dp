@@ -48,12 +48,20 @@ jobs:
           --build-path build \
           firmware/firmware.ino
 
+      # build 配下のファイル一覧を txt に書き出す
+      - name: Write build file list
+        run: |
+          echo "Build directory listing for $(date)" > build/file_list.txt
+          ls -la build >> build/file_list.txt
+
       # 通常の Artifacts 保存 (build フォルダ内を保存)
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: esp32-a2dp-firmware
-          path: build/*.bin
+          path: |
+            build/*.bin
+            build/file_list.txt
 
       # GitHub Release の自動作成 & アセット添付 (タグ Push 時のみ)
       - name: Create GitHub Release
