@@ -42,12 +42,7 @@ jobs:
       - name: Compile Sketch
         run: |
           arduino-cli compile \
-          --fqbn esp32:esp32:esp32 \
-          --build-property "build.partitions=huge_app" \
-          --build-property "upload.maximum_size=3145728" \
-          --build-property "build.flash_mode=dio" \
-          --build-property "build.flash_freq=40m" \
-          --build-property "build.flash_size=4MB" \
+          --fqbn "esp32:esp32:esp32:PartitionScheme=huge_app,FlashMode=dio,FlashFreq=40m,FlashSize=4M" \
           --build-path build \
           firmware/firmware.ino
 
