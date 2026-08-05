@@ -42,11 +42,11 @@ jobs:
       - name: Compile Sketch
         run: |
           arduino-cli compile \
-            --fqbn esp32:esp32:esp32 \
-            --build-property "build.partitions=huge_app" \
-            --build-property "upload.maximum_size=3145728" \
-            --output-dir build \
-            firmware/firmware.ino
+          --fqbn esp32:esp32:esp32 \
+          --build-property "build.partitions=huge_app" \
+          --build-property "upload.maximum_size=3145728" \
+          --build-path build \
+          firmware/firmware.ino
 
       # 通常の Artifacts 保存 (build フォルダ内を保存)
       - name: Upload Build Artifacts
