@@ -32,17 +32,20 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.14
 
-      # ESP32-A2DP ライブラリを GitHub から直接インストール
+      # スケッチが使用する外部ライブラリを導入
       - name: Install ESP32-A2DP library from GitHub
         run: |
           mkdir -p ~/Arduino/libraries
           git clone https://github.com/pschatzmann/ESP32-A2DP.git ~/Arduino/libraries/ESP32-A2DP
 
+      - name: Install U8g2 library
+        run: arduino-cli lib install "U8g2"
+
       # コンパイル実行 (output-dir を指定して構成ファイルを確実に生成)
       - name: Compile Sketch
         run: |
           arduino-cli compile \
-            --fqbn "esp32:esp32:esp32:PartitionScheme=huge_app,FlashMode=dio,FlashFreq=40,FlashSize=4M" \
+            --fqbn "esp32:esp32:esp32:PartitionScheme=huge_app,FlashMode=dio,FlashFreq=80,FlashSize=4M" \
             --build-path build_temp \
             --output-dir build \
             firmware/firmware.ino
