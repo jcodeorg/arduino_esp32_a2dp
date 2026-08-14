@@ -45,7 +45,7 @@ jobs:
       - name: Compile Sketch
         run: |
           arduino-cli compile \
-            --fqbn "esp32:esp32:esp32:PartitionScheme=huge_app,FlashMode=dio,FlashFreq=80,FlashSize=4M" \
+            --fqbn "esp32:esp32:esp32:PartitionScheme=huge_app,FlashMode=dio,FlashFreq=80m,FlashSize=4M" \
             --build-path build_temp \
             --output-dir build \
             firmware/firmware.ino
