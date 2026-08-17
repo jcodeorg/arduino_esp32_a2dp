@@ -1,6 +1,12 @@
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
 #include <U8g2lib.h>
+#include <Adafruit_NeoPixel.h>
+
+// WS2812B設定
+constexpr uint8_t WS2812B_PIN = 13;
+constexpr uint16_t WS2812B_COUNT = 1;
+Adafruit_NeoPixel ws2812b(WS2812B_COUNT, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
 
 // I2C接続のOLED設定 (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
@@ -76,6 +82,12 @@ void volume_changed_callback(int volume) {
 
 void setup() {
   Serial.begin(115200);
+
+  // WS2812Bを緑で点灯
+  ws2812b.begin();
+  ws2812b.setBrightness(255);
+  ws2812b.setPixelColor(0, ws2812b.Color(0, 255, 0));
+  ws2812b.show();
 
   // SDAをGPIO 19、SCLをGPIO 32 に設定
   // （配線に合わせて Wire.begin(SDA_PIN, SCL_PIN) の順で指定します）
