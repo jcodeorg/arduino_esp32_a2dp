@@ -4,9 +4,18 @@
 #include <Adafruit_NeoPixel.h>
 
 // WS2812B設定
-constexpr uint8_t WS2812B_PIN = 13;
+constexpr uint8_t WS2812B_PIN = 16;
 constexpr uint16_t WS2812B_COUNT = 1;
 Adafruit_NeoPixel ws2812b(WS2812B_COUNT, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
+const uint32_t ws2812bColors[] = {
+  0xFF0000, 0xFF8000, 0xFFFF00, 0x00FF00,
+  0x0000FF, 0x4B0082, 0x8F00FF
+};
+constexpr uint8_t WS2812B_COLOR_COUNT = sizeof(ws2812bColors) / sizeof(ws2812bColors[0]);
+constexpr unsigned long WS2812B_INTERVAL_MS = 500;
+bool isPlaying = false;
+uint8_t ws2812bColorIndex = 0;
+unsigned long lastWs2812bUpdate = 0;
 
 // I2C接続のOLED設定 (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
@@ -80,13 +89,23 @@ void volume_changed_callback(int volume) {
   updateDisplay();
 }
 
+void audio_state_changed_callback(esp_a2d_audio_state_t state) {
+  isPlaying = (state == ESP_A2D_AUDIO_STATE_STARTED);
+
+  if (!isPlaying) {
+    ws2812bColorIndex = 3;
+    ws2812b.setPixelColor(0, ws2812bColors[ws2812bColorIndex]);
+    ws2812b.show();
+  }
+}
+
 void setup() {
   Serial.begin(115200);
 
   // WS2812Bを緑で点灯
   ws2812b.begin();
   ws2812b.setBrightness(255);
-  ws2812b.setPixelColor(0, ws2812b.Color(0, 255, 0));
+  ws2812b.setPixelColor(0, ws2812bColors[3]);
   ws2812b.show();
 
   // SDAをGPIO 19、SCLをGPIO 32 に設定
@@ -100,7 +119,7 @@ void setup() {
   // 初期画面
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_unifont_t_japanese1);
-  u8g2.drawUTF8(0, 20, "BTスピーカー5.2");
+  u8g2.drawUTF8(0, 20, "BTスピーカー5.3");
   u8g2.setFont(u8g2_font_6x10_tf);
   u8g2.drawStr(0, 40, "Ready...");
   u8g2.sendBuffer();
@@ -118,10 +137,17 @@ void setup() {
   // コールバック登録
   a2dp_sink.set_avrc_metadata_callback(avrc_metadata_callback);
   a2dp_sink.set_on_volumechange(volume_changed_callback);
+  a2dp_sink.set_on_audio_state_changed(audio_state_changed_callback);
 
   // Bluetooth起動
-  a2dp_sink.start("BT_Speaker5.2");
+  a2dp_sink.start("BT_Speaker5.3");
 }
 
 void loop() {
+  if (isPlaying && millis() - lastWs2812bUpdate >= WS2812B_INTERVAL_MS) {
+    lastWs2812bUpdate = millis();
+    ws2812bColorIndex = (ws2812bColorIndex + 1) % WS2812B_COLOR_COUNT;
+    ws2812b.setPixelColor(0, ws2812bColors[ws2812bColorIndex]);
+    ws2812b.show();
+  }
 }
