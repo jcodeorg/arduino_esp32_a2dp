@@ -31,8 +31,8 @@ ESP32-WROOM-32E を使用した、Arduino版 A2DP Bluetoothスピーカーのフ
 ダウンロードした ZIP ファイルを解凍し、以下の3つのファイルが含まれているか確認してください：
 
 * `bootloader.bin`
-* `firmware.bin`
 * `partitions.bin`
+* `firmware.bin`
 
 ---
 
