@@ -1,28 +1,13 @@
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
 #include <U8g2lib.h>
-#include <Adafruit_NeoPixel.h>
-
-// WS2812B設定
-constexpr uint8_t WS2812B_PIN = 18;
-constexpr uint16_t WS2812B_COUNT = 1;
-Adafruit_NeoPixel ws2812b(WS2812B_COUNT, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
-const uint32_t ws2812bColors[] = {
-  0xFF0000, 0xFF8000, 0xFFFF00, 0x00FF00,
-  0x0000FF, 0x4B0082, 0x8F00FF
-};
-constexpr uint8_t WS2812B_COLOR_COUNT = sizeof(ws2812bColors) / sizeof(ws2812bColors[0]);
-constexpr unsigned long WS2812B_INTERVAL_MS = 30;
-constexpr unsigned long WS2812B_TRANSITION_MS = 3000;
-bool isPlaying = false;
-uint8_t ws2812bColorIndex = 0;
-unsigned long lastWs2812bUpdate = 0;
-unsigned long ws2812bTransitionStart = 0;
+#include "NeoPixelController.h"
 
 // I2C接続のOLED設定 (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 BluetoothA2DPSink a2dp_sink;
+NeoPixelController neoPixelController;
 
 // 表示用変数
 String currentTitle = "未接続";
@@ -92,28 +77,13 @@ void volume_changed_callback(int volume) {
 }
 
 void audio_state_changed_callback(esp_a2d_audio_state_t state, void *) {
-  isPlaying = (state == ESP_A2D_AUDIO_STATE_STARTED);
-
-  if (isPlaying) {
-    ws2812bTransitionStart = millis();
-    lastWs2812bUpdate = ws2812bTransitionStart;
-  }
-
-  if (!isPlaying) {
-    ws2812bColorIndex = 3;
-    ws2812b.setPixelColor(0, ws2812bColors[ws2812bColorIndex]);
-    ws2812b.show();
-  }
+  neoPixelController.setPlaying(state == ESP_A2D_AUDIO_STATE_STARTED);
 }
 
 void setup() {
   Serial.begin(115200);
 
-  // WS2812Bを緑で点灯
-  ws2812b.begin();
-  ws2812b.setBrightness(255);
-  ws2812b.setPixelColor(0, ws2812bColors[3]);
-  ws2812b.show();
+  neoPixelController.begin();
 
   // SDAをGPIO 19、SCLをGPIO 32 に設定
   // （配線に合わせて Wire.begin(SDA_PIN, SCL_PIN) の順で指定します）
@@ -151,27 +121,5 @@ void setup() {
 }
 
 void loop() {
-  if (isPlaying && millis() - lastWs2812bUpdate >= WS2812B_INTERVAL_MS) {
-    unsigned long now = millis();
-    lastWs2812bUpdate = now;
-    unsigned long transitionElapsed = now - ws2812bTransitionStart;
-    if (transitionElapsed >= WS2812B_TRANSITION_MS) {
-      ws2812bColorIndex = (ws2812bColorIndex + transitionElapsed / WS2812B_TRANSITION_MS)
-        % WS2812B_COLOR_COUNT;
-      ws2812bTransitionStart = now;
-      transitionElapsed = 0;
-    }
-    uint8_t nextColorIndex = (ws2812bColorIndex + 1) % WS2812B_COLOR_COUNT;
-    uint32_t currentColor = ws2812bColors[ws2812bColorIndex];
-    uint32_t nextColor = ws2812bColors[nextColorIndex];
-    uint8_t red = ((currentColor >> 16) * (WS2812B_TRANSITION_MS - transitionElapsed)
-      + (nextColor >> 16) * transitionElapsed) / WS2812B_TRANSITION_MS;
-    uint8_t green = (((currentColor >> 8) & 0xFF) * (WS2812B_TRANSITION_MS - transitionElapsed)
-      + ((nextColor >> 8) & 0xFF) * transitionElapsed) / WS2812B_TRANSITION_MS;
-    uint8_t blue = ((currentColor & 0xFF) * (WS2812B_TRANSITION_MS - transitionElapsed)
-      + (nextColor & 0xFF) * transitionElapsed) / WS2812B_TRANSITION_MS;
-    ws2812b.setPixelColor(0, red, green, blue);
-    ws2812b.show();
-
-  }
+  neoPixelController.update();
 }
