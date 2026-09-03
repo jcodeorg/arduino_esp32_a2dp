@@ -4,7 +4,7 @@
 #include <Adafruit_NeoPixel.h>
 
 // WS2812B設定
-constexpr uint8_t WS2812B_PIN = 16;
+constexpr uint8_t WS2812B_PIN = 18;
 constexpr uint16_t WS2812B_COUNT = 1;
 Adafruit_NeoPixel ws2812b(WS2812B_COUNT, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
 const uint32_t ws2812bColors[] = {
@@ -117,7 +117,7 @@ void setup() {
 
   // SDAをGPIO 19、SCLをGPIO 32 に設定
   // （配線に合わせて Wire.begin(SDA_PIN, SCL_PIN) の順で指定します）
-  Wire.begin(19, 5);
+  Wire.begin(21, 22);
   
   // OLED初期化
   u8g2.begin();
