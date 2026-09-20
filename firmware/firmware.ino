@@ -24,6 +24,65 @@ bool bluetoothConnected = false;
 bool musicPlaying = false;
 unsigned long lastDisplayUpdate = 0;
 
+// UTF-8の文字列を1文字ずつ調べ、フォントにない文字を□へ置き換えます。
+// U8g2は、知らない文字を自動では表示せず、次の文字へ進んでしまいます。
+String replaceMissingGlyphs(const String& text) {
+  String result;
+
+  for (size_t index = 0; index < text.length();) {
+    const uint8_t firstByte = static_cast<uint8_t>(text[index]);
+    uint32_t codePoint = 0;
+    size_t byteCount = 0;
+
+    // UTF-8の先頭バイトから、1文字のバイト数を判定します。
+    if (firstByte < 0x80) {
+      codePoint = firstByte;
+      byteCount = 1;
+    } else if ((firstByte & 0xE0) == 0xC0 && index + 1 < text.length()) {
+      codePoint = firstByte & 0x1F;
+      byteCount = 2;
+    } else if ((firstByte & 0xF0) == 0xE0 && index + 2 < text.length()) {
+      codePoint = firstByte & 0x0F;
+      byteCount = 3;
+    } else if ((firstByte & 0xF8) == 0xF0 && index + 3 < text.length()) {
+      codePoint = firstByte & 0x07;
+      byteCount = 4;
+    } else {
+      // 壊れたUTF-8も、表示できない文字としてトーフにします。
+      result += "□";
+      ++index;
+      continue;
+    }
+
+    // 2バイト目以降をつなげて、Unicodeの文字コードを作ります。
+    bool valid = true;
+    for (size_t offset = 1; offset < byteCount; ++offset) {
+      const uint8_t nextByte = static_cast<uint8_t>(text[index + offset]);
+      if ((nextByte & 0xC0) != 0x80) {
+        valid = false;
+        break;
+      }
+      codePoint = (codePoint << 6) | (nextByte & 0x3F);
+    }
+
+    if (!valid) {
+      result += "□";
+      ++index;
+      continue;
+    }
+
+    // 幅が0なら、その文字の絵がフォントにないと判断します。
+    if (u8g2.getGlyphWidth(codePoint) == 0) {
+      result += "□";
+    } else {
+      result += text.substring(index, index + byteCount);
+    }
+    index += byteCount;
+  }
+
+  return result;
+}
+
 // OLEDの内容を現在の状態に合わせて描き直します。
 void updateDisplay() {
   u8g2.clearBuffer();
@@ -84,12 +143,14 @@ void updateDisplay() {
   // 下の部分は、日本語を含む曲名とアーティスト名を表示します。
   u8g2.setFont(u8g2_font_unifont_t_japanese1);
 
-  // 曲名を表示します。drawUTF8は日本語も扱える関数です。
-  u8g2.drawUTF8(0, 32, currentTitle.c_str());
+  // フォントにない文字は□に置き換えてから表示します。
+  String displayTitle = replaceMissingGlyphs(currentTitle);
+  u8g2.drawUTF8(0, 32, displayTitle.c_str());
 
   // アーティスト名が空でないときだけ表示します。
   if (currentArtist.length() > 0) {
-    u8g2.drawUTF8(0, 54, currentArtist.c_str());
+    String displayArtist = replaceMissingGlyphs(currentArtist);
+    u8g2.drawUTF8(0, 54, displayArtist.c_str());
   }
 
   // ここまでの描画内容を、実際のOLED画面へ送ります。
