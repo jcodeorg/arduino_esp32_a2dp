@@ -19,10 +19,13 @@ public:
 
   void begin(uint8_t soilPin);
   bool update();
+  void refreshSensors();
   const SensorReading& latest() const;
   bool hasReading() const;
   size_t logCount() const;
   bool getCurrentTime(char* buffer, size_t bufferSize) const;
+  const char* bluetoothName() const;
+  bool isBluetoothConnected() const;
 
 private:
   static constexpr unsigned long kMeasureIntervalMs = 3600000UL;
@@ -46,8 +49,10 @@ private:
   unsigned long lastMeasure_ = 0;
   int64_t epochOffset_ = 0;
   bool timeSynchronized_ = false;
+  bool bluetoothConnected_ = false;
   String bluetoothName_;
   String commandBuffer_;
 
   friend class SensorLoggerCallbacks;
+  friend class SensorLoggerServerCallbacks;
 };

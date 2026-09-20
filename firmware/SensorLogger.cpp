@@ -39,11 +39,19 @@ private:
 
 class SensorLoggerServerCallbacks : public BLEServerCallbacks {
 public:
-  void onConnect(BLEServer*) override {}
+  explicit SensorLoggerServerCallbacks(SensorLogger* logger) : logger_(logger) {}
+
+  void onConnect(BLEServer*) override {
+    logger_->bluetoothConnected_ = true;
+  }
 
   void onDisconnect(BLEServer* server) override {
+    logger_->bluetoothConnected_ = false;
     server->startAdvertising();
   }
+
+private:
+  SensorLogger* logger_;
 };
 
 void SensorLogger::begin(uint8_t soilPin) {
@@ -61,7 +69,7 @@ void SensorLogger::begin(uint8_t soilPin) {
   BLEDevice::init(bluetoothName_.c_str());
 
   server_ = BLEDevice::createServer();
-  server_->setCallbacks(new SensorLoggerServerCallbacks());
+  server_->setCallbacks(new SensorLoggerServerCallbacks(this));
   BLEService* service = server_->createService(kNusServiceUuid);
   BLECharacteristic* rxCharacteristic = service->createCharacteristic(
     kNusRxUuid, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
@@ -94,12 +102,38 @@ bool SensorLogger::update() {
   return false;
 }
 
+void SensorLogger::refreshSensors() {
+  SensorReading reading = {};
+  sensors_event_t humidityEvent;
+  sensors_event_t temperatureEvent;
+
+  if (aht20Ready) {
+    aht20.getEvent(&humidityEvent, &temperatureEvent);
+    reading.temperature = temperatureEvent.temperature;
+    reading.humidity = humidityEvent.relative_humidity;
+  }
+  if (bh1750Ready) {
+    reading.illuminance = bh1750.readLightLevel();
+  }
+  reading.soilMoisture = analogRead(soilPin_);
+  reading.timestamp = latest_.timestamp;
+  latest_ = reading;
+}
+
 const SensorReading& SensorLogger::latest() const {
   return latest_;
 }
 
 bool SensorLogger::hasReading() const {
   return logCount_ != 0;
+}
+
+const char* SensorLogger::bluetoothName() const {
+  return bluetoothName_.c_str();
+}
+
+bool SensorLogger::isBluetoothConnected() const {
+  return bluetoothConnected_;
 }
 
 size_t SensorLogger::logCount() const {

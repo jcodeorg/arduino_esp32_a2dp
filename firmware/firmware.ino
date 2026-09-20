@@ -31,24 +31,32 @@ void updateDisplay() {
 
     char sensorLine[32];
     char timeLine[24];
+    if (sensorLogger.isBluetoothConnected()) {
+      u8g2.setDrawColor(1);
+      u8g2.drawBox(0, 0, 128, 10);
+      u8g2.setDrawColor(0);
+    }
+    u8g2.drawStr(0, 9, sensorLogger.bluetoothName());
+    u8g2.setDrawColor(1);
+
     if (sensorLogger.getCurrentTime(timeLine, sizeof(timeLine))) {
-      u8g2.drawStr(0, 9, timeLine);
+      u8g2.drawStr(0, 20, timeLine);
     } else {
-      u8g2.drawStr(0, 9, "RTC: --/--/-- --:--:--");
+      u8g2.drawStr(0, 20, "RTC: --/--/-- --:--:--");
     }
 
     snprintf(sensorLine, sizeof(sensorLine), "Log: %u", static_cast<unsigned int>(sensorLogger.logCount()));
-    u8g2.drawStr(0, 20, sensorLine);
+    u8g2.drawStr(0, 31, sensorLine);
 
     snprintf(sensorLine, sizeof(sensorLine), "T:%5.1fC H:%5.1f%%",
       reading.temperature, reading.humidity);
-    u8g2.drawStr(0, 32, sensorLine);
+    u8g2.drawStr(0, 42, sensorLine);
 
     snprintf(sensorLine, sizeof(sensorLine), "Light: %6.1f lx", reading.illuminance);
-    u8g2.drawStr(0, 44, sensorLine);
+    u8g2.drawStr(0, 53, sensorLine);
 
     snprintf(sensorLine, sizeof(sensorLine), "Soil: %4u", reading.soilMoisture);
-    u8g2.drawStr(0, 56, sensorLine);
+    u8g2.drawStr(0, 64, sensorLine);
     u8g2.sendBuffer();
     return;
   }
@@ -171,6 +179,7 @@ void loop() {
   if ((!bluetoothConnected || !musicPlaying)
       && (newReading || now - lastDisplayUpdate >= 1000UL)) {
     lastDisplayUpdate = now;
+    sensorLogger.refreshSensors();
     updateDisplay();
   }
 }
