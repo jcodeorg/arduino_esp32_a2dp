@@ -85,6 +85,9 @@ void SensorLogger::begin(uint8_t soilPin) {
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
   advertising->addServiceUUID(kNusServiceUuid);
   advertising->setScanResponse(true);
+  BLEAdvertisementData scanResponseData;
+  scanResponseData.setName(bluetoothName_.c_str());
+  advertising->setScanResponseData(scanResponseData);
   advertising->setMinPreferred(0x06);
   advertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
