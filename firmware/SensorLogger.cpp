@@ -12,6 +12,7 @@ namespace {
 constexpr char kNusServiceUuid[] = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E";
 constexpr char kNusRxUuid[] = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E";
 constexpr char kNusTxUuid[] = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
+constexpr char kBleDeviceNamePrefix[] = "EnvLog";
 constexpr int64_t kInitialYear = 1700;
 constexpr int64_t kSecondsPerDay = 86400;
 
@@ -66,7 +67,7 @@ void SensorLogger::begin(uint8_t soilPin) {
 
   uint64_t mac = ESP.getEfuseMac();
   char name[14];
-  snprintf(name, sizeof(name), "EnvLog-%05llX", mac & 0xFFFFF);
+  snprintf(name, sizeof(name), "%s-%05llX", kBleDeviceNamePrefix, mac & 0xFFFFF);
   bluetoothName_ = name;
   BLEDevice::init(bluetoothName_.c_str());
 
@@ -298,7 +299,6 @@ void SensorLogger::processCommand(const String& command) {
 }
 
 void SensorLogger::sendLog() {
-  sendNotification("タイムスタンプ,温度,湿度,土壌水分,光量,デバイス名\n");
   for (size_t index = 0; index < logCount_; ++index) {
     size_t logIndex = (logStart_ + index) % kMaxLogEntries;
     const SensorReading& reading = log_[logIndex];

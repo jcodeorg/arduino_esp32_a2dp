@@ -29,7 +29,7 @@ public:
   bool isBluetoothConnected() const;
 
 private:
-  static constexpr unsigned long kMeasureIntervalMs = 10000UL;
+  static constexpr unsigned long kMeasureIntervalMs = 3600000UL;
   static constexpr unsigned long kAdvertiseRetryIntervalMs = 500UL;
 
   void readAndStore();

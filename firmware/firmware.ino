@@ -4,7 +4,7 @@
 #include "NeoPixelController.h"
 #include "SensorLogger.h"
 
-const char kBluetoothName[] = "BT_Speaker5.4";
+const char kA2dpDeviceName[] = "BT_Speaker5.4";
 
 // I2C接続のOLED設定 (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
@@ -169,7 +169,7 @@ void setup() {
   a2dp_sink.set_on_connection_state_changed(connection_state_changed_callback);
 
   // Bluetooth起動
-  a2dp_sink.start(kBluetoothName);
+  a2dp_sink.start(kA2dpDeviceName);
 }
 
 void loop() {
