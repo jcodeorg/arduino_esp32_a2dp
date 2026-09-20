@@ -24,32 +24,40 @@ bool bluetoothConnected = false;
 bool musicPlaying = false;
 unsigned long lastDisplayUpdate = 0;
 
-// UTF-8の文字列を1文字ずつ調べ、フォントにない文字を□へ置き換えます。
-// U8g2は、知らない文字を自動では表示せず、次の文字へ進んでしまいます。
-String replaceMissingGlyphs(const String& text) {
-  String result;
+// UTF-8の文字列を1文字ずつ描画します。
+// フォントにない文字は、フォントに頼らず四角形を直接描きます。
+void drawUtf8WithTofu(uint8_t x, uint8_t y, const String& text) {
+  constexpr uint8_t kTofuSize = 12;
+  constexpr uint8_t kTofuAdvance = 16;
+  uint8_t cursorX = x;
 
   for (size_t index = 0; index < text.length();) {
     const uint8_t firstByte = static_cast<uint8_t>(text[index]);
     size_t byteCount = 0;
+    uint32_t codePoint = 0;
 
     // UTF-8の先頭バイトから、1文字のバイト数を判定します。
     if (firstByte < 0x80) {
+      codePoint = firstByte;
       byteCount = 1;
     } else if ((firstByte & 0xE0) == 0xC0 && index + 1 < text.length()) {
+      codePoint = firstByte & 0x1F;
       byteCount = 2;
     } else if ((firstByte & 0xF0) == 0xE0 && index + 2 < text.length()) {
+      codePoint = firstByte & 0x0F;
       byteCount = 3;
     } else if ((firstByte & 0xF8) == 0xF0 && index + 3 < text.length()) {
+      codePoint = firstByte & 0x07;
       byteCount = 4;
     } else {
-      // 壊れたUTF-8も、表示できない文字としてトーフにします。
-      result += "□";
+      // 壊れたUTF-8も、表示できない文字としてトーフを描きます。
+      u8g2.drawFrame(cursorX, y - kTofuSize, kTofuSize, kTofuSize);
+      cursorX += kTofuAdvance;
       ++index;
       continue;
     }
 
-    // 2バイト目以降がUTF-8の続きになっているか確認します。
+    // 2バイト目以降をつなげて、Unicodeの文字コードを作ります。
     bool valid = true;
     for (size_t offset = 1; offset < byteCount; ++offset) {
       const uint8_t nextByte = static_cast<uint8_t>(text[index + offset]);
@@ -57,28 +65,30 @@ String replaceMissingGlyphs(const String& text) {
         valid = false;
         break;
       }
+      codePoint = (codePoint << 6) | (nextByte & 0x3F);
     }
 
     if (!valid) {
-      result += "□";
+      u8g2.drawFrame(cursorX, y - kTofuSize, kTofuSize, kTofuSize);
+      cursorX += kTofuAdvance;
       ++index;
       continue;
     }
 
-    // 1文字分のUTF-8文字列を作ります。
-    String character = text.substring(index, index + byteCount);
-
-    // 幅が0なら、その文字の絵がフォントにないと判断します。
-    // getGlyphWidthは使えるU8g2の版が限られるため、getUTF8Widthを使います。
-    if (u8g2.getUTF8Width(character.c_str()) == 0) {
-      result += "□";
+    // フォントに文字があれば、実際のグリフを描画します。
+    // 16ビットを超える文字は、このフォントでは表示できないためトーフにします。
+    if (codePoint <= 0xFFFF && u8g2_IsGlyph(u8g2.getU8g2(), codePoint)) {
+      u8g2.drawGlyph(cursorX, y, static_cast<uint16_t>(codePoint));
+      cursorX += static_cast<uint8_t>(u8g2_GetGlyphWidth(
+        u8g2.getU8g2(), static_cast<uint16_t>(codePoint)));
     } else {
-      result += character;
+      // □の字形がフォントにない場合でも、四角形なら必ず表示できます。
+      u8g2.drawFrame(cursorX, y - kTofuSize, kTofuSize, kTofuSize);
+      cursorX += kTofuAdvance;
     }
+
     index += byteCount;
   }
-
-  return result;
 }
 
 // OLEDの内容を現在の状態に合わせて描き直します。
@@ -141,14 +151,12 @@ void updateDisplay() {
   // 下の部分は、日本語を含む曲名とアーティスト名を表示します。
   u8g2.setFont(u8g2_font_unifont_t_japanese1);
 
-  // フォントにない文字は□に置き換えてから表示します。
-  String displayTitle = replaceMissingGlyphs(currentTitle);
-  u8g2.drawUTF8(0, 32, displayTitle.c_str());
+  // フォントにない文字は、四角形のトーフとして表示します。
+  drawUtf8WithTofu(0, 32, currentTitle);
 
   // アーティスト名が空でないときだけ表示します。
   if (currentArtist.length() > 0) {
-    String displayArtist = replaceMissingGlyphs(currentArtist);
-    u8g2.drawUTF8(0, 54, displayArtist.c_str());
+    drawUtf8WithTofu(0, 54, currentArtist);
   }
 
   // ここまでの描画内容を、実際のOLED画面へ送ります。
