@@ -123,7 +123,7 @@ void setup() {
   u8g2.begin();
   u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
 
-  sensorLogger.begin(32, kBluetoothName);
+  sensorLogger.begin(32);
   updateDisplay();
 
   // I2S ピン設定 (BCK: 27, WS: 25, DOUT: 26)

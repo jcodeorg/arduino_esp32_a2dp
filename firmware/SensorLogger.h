@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Arduino.h>
-#include <BluetoothSerial.h>
+
+class BLECharacteristic;
+class BLEServer;
 
 struct SensorReading {
   unsigned long timestamp;
@@ -15,7 +17,7 @@ class SensorLogger {
 public:
   static constexpr size_t kMaxLogEntries = 2000;
 
-  void begin(uint8_t soilPin, const char* bluetoothName);
+  void begin(uint8_t soilPin);
   bool update();
   const SensorReading& latest() const;
   bool hasReading() const;
@@ -26,11 +28,14 @@ private:
   void readAndStore();
   void processBluetooth();
   void processCommand(const String& command);
+  void receiveBluetoothData(const String& data);
+  void sendNotification(const char* data);
   void sendLog();
   void clearLog();
   unsigned long currentTimestamp() const;
 
-  BluetoothSerial bluetooth_;
+  BLEServer* server_ = nullptr;
+  BLECharacteristic* txCharacteristic_ = nullptr;
   SensorReading log_[kMaxLogEntries] = {};
   SensorReading latest_ = {};
   size_t logStart_ = 0;
@@ -39,6 +44,8 @@ private:
   unsigned long lastMeasure_ = 0;
   unsigned long epochOffset_ = 0;
   bool timeSynchronized_ = false;
-  const char* bluetoothName_ = "";
+  String bluetoothName_;
   String commandBuffer_;
+
+  friend class SensorLoggerCallbacks;
 };
