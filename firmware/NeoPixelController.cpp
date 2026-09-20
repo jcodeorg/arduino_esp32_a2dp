@@ -3,7 +3,6 @@
 #include <Adafruit_NeoPixel.h>
 
 namespace {
-constexpr uint8_t kPin = 18;
 constexpr uint16_t kCount = 1;
 constexpr uint32_t kColors[] = {
   0xFF0000, 0xFF8000, 0xFFFF00, 0x00FF00,
@@ -11,10 +10,11 @@ constexpr uint32_t kColors[] = {
 };
 constexpr uint8_t kColorCount = sizeof(kColors) / sizeof(kColors[0]);
 
-Adafruit_NeoPixel pixels(kCount, kPin, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixels(kCount, 0, NEO_GRB + NEO_KHZ800);
 }
 
-void NeoPixelController::begin() {
+void NeoPixelController::begin(uint8_t pin) {
+  pixels.setPin(pin);
   pixels.begin();
   pixels.setBrightness(255);
   pixels.setPixelColor(0, kColors[kStoppedColorIndex]);

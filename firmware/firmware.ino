@@ -3,6 +3,8 @@
 #include <U8g2lib.h>
 #include "NeoPixelController.h"
 
+const char kBluetoothName[] = "BT_Speaker5.31";
+
 // I2C接続のOLED設定 (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
@@ -83,7 +85,7 @@ void audio_state_changed_callback(esp_a2d_audio_state_t state, void *) {
 void setup() {
   Serial.begin(115200);
 
-  neoPixelController.begin();
+  neoPixelController.begin(18);
 
   // SDAをGPIO 19、SCLをGPIO 32 に設定
   // （配線に合わせて Wire.begin(SDA_PIN, SCL_PIN) の順で指定します）
@@ -96,7 +98,7 @@ void setup() {
   // 初期画面
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_unifont_t_japanese1);
-  u8g2.drawUTF8(0, 20, "BTスピーカー5.3");
+  u8g2.drawUTF8(0, 20, kBluetoothName);
   u8g2.setFont(u8g2_font_6x10_tf);
   u8g2.drawStr(0, 40, "Ready...");
   u8g2.sendBuffer();
@@ -117,7 +119,7 @@ void setup() {
   a2dp_sink.set_on_audio_state_changed(audio_state_changed_callback);
 
   // Bluetooth起動
-  a2dp_sink.start("BT_Speaker5.3");
+  a2dp_sink.start(kBluetoothName);
 }
 
 void loop() {

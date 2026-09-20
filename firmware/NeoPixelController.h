@@ -4,7 +4,7 @@
 
 class NeoPixelController {
 public:
-  void begin();
+  void begin(uint8_t pin);
   void setPlaying(bool playing);
   void update();
 
