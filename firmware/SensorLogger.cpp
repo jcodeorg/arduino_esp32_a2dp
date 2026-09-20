@@ -47,6 +47,8 @@ public:
 
   void onDisconnect(BLEServer* server) override {
     logger_->bluetoothConnected_ = false;
+    logger_->commandBuffer_ = "";
+    logger_->lastAdvertise_ = millis();
     server->startAdvertising();
   }
 
@@ -88,12 +90,18 @@ void SensorLogger::begin(uint8_t soilPin) {
 
   readAndStore();
   lastMeasure_ = millis();
+  lastAdvertise_ = millis();
 }
 
 bool SensorLogger::update() {
   processBluetooth();
 
   unsigned long now = millis();
+  if (!bluetoothConnected_ && now - lastAdvertise_ >= kAdvertiseRetryIntervalMs) {
+    lastAdvertise_ = now;
+    BLEDevice::startAdvertising();
+  }
+
   if (now - lastMeasure_ >= kMeasureIntervalMs) {
     lastMeasure_ = now;
     readAndStore();
@@ -140,12 +148,11 @@ size_t SensorLogger::logCount() const {
   return logCount_;
 }
 
-bool SensorLogger::getCurrentTime(char* buffer, size_t bufferSize) const {
+bool SensorLogger::formatTimestamp(int64_t timestamp, char* buffer, size_t bufferSize) const {
   if (bufferSize == 0) {
     return false;
   }
 
-  int64_t timestamp = currentTimestamp();
   if (timeSynchronized_) {
     time_t unixTimestamp = static_cast<time_t>(timestamp);
     struct tm date;
@@ -175,6 +182,10 @@ bool SensorLogger::getCurrentTime(char* buffer, size_t bufferSize) const {
   snprintf(buffer, bufferSize, "%04d/%02d/%02d %02d:%02d:%02d",
     year, month, day, seconds / 3600, (seconds / 60) % 60, seconds % 60);
   return true;
+}
+
+bool SensorLogger::getCurrentTime(char* buffer, size_t bufferSize) const {
+  return formatTimestamp(currentTimestamp(), buffer, bufferSize);
 }
 
 void SensorLogger::readAndStore() {
@@ -230,6 +241,23 @@ void SensorLogger::receiveBluetoothData(const String& data) {
   }
 }
 
+void SensorLogger::applyHistoricalTimeAdjustment(int64_t epoch) {
+  if (historicalAdjustmentApplied_ || timeSynchronized_) {
+    return;
+  }
+
+  const int64_t elapsedSeconds = millis() / 1000UL;
+  historicalEpochOffset_ = epoch - elapsedSeconds;
+  for (size_t index = 0; index < logCount_; ++index) {
+    size_t logIndex = (logStart_ + index) % kMaxLogEntries;
+    const int64_t storedSeconds = log_[logIndex].timestamp;
+    if (storedSeconds <= elapsedSeconds) {
+      log_[logIndex].timestamp = storedSeconds + historicalEpochOffset_;
+    }
+  }
+  historicalAdjustmentApplied_ = true;
+}
+
 void SensorLogger::processCommand(const String& command) {
   if (command == "GET_LOG") {
     sendLog();
@@ -257,6 +285,7 @@ void SensorLogger::processCommand(const String& command) {
       epoch = static_cast<unsigned long>(mktime(&date));
     }
     if (epoch != 0) {
+      applyHistoricalTimeAdjustment(static_cast<int64_t>(epoch));
       epochOffset_ = epoch - millis() / 1000UL;
       timeSynchronized_ = true;
       txCharacteristic_->setValue("OK_TIME\n");
@@ -269,17 +298,22 @@ void SensorLogger::processCommand(const String& command) {
 }
 
 void SensorLogger::sendLog() {
-  sendNotification("timestamp,temp,humid,light,soil,device\n");
+  sendNotification("タイムスタンプ,温度,湿度,土壌水分,光量,デバイス名\n");
   for (size_t index = 0; index < logCount_; ++index) {
     size_t logIndex = (logStart_ + index) % kMaxLogEntries;
     const SensorReading& reading = log_[logIndex];
-    char line[128];
-    snprintf(line, sizeof(line), "%lld,%.2f,%.2f,%.2f,%u,%s\n",
-      reading.timestamp,
+    char timestamp[32];
+    char line[160];
+    const bool timestampValid = formatTimestamp(reading.timestamp, timestamp, sizeof(timestamp));
+    if (!timestampValid) {
+      timestamp[0] = '\0';
+    }
+    snprintf(line, sizeof(line), "%s,%.2f,%.2f,%u,%.2f,%s\n",
+      timestamp,
       reading.temperature,
       reading.humidity,
-      reading.illuminance,
       reading.soilMoisture,
+      reading.illuminance,
       bluetoothName_.c_str());
     sendNotification(line);
     delay(20);
