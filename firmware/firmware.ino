@@ -1,34 +1,23 @@
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
 #include <U8g2lib.h>
-#include <Adafruit_AHTX0.h>
-#include <BH1750.h>
 #include "NeoPixelController.h"
+#include "SensorLogger.h"
 
 const char kBluetoothName[] = "BT_Speaker5.32";
-constexpr uint8_t kSoilMoisturePin = 32;
-constexpr unsigned long kSensorUpdateIntervalMs = 1000;
 
 // I2C接続のOLED設定 (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 BluetoothA2DPSink a2dp_sink;
 NeoPixelController neoPixelController;
-Adafruit_AHTX0 aht20;
-BH1750 bh1750;
+SensorLogger sensorLogger;
 
 // 表示用変数
 String currentTitle = "未接続";
 String currentArtist = "";
 int currentVolumePercent = 0; // 音量 (0 ~ 100%)
 bool bluetoothConnected = false;
-bool aht20Ready = false;
-bool bh1750Ready = false;
-unsigned long lastSensorUpdate = 0;
-float temperature = 0.0f;
-float humidity = 0.0f;
-float illuminance = 0.0f;
-int soilMoisture = 0;
 
 // 画面全体を再描画する関数
 void updateDisplay() {
@@ -36,23 +25,17 @@ void updateDisplay() {
 
   if (!bluetoothConnected) {
     u8g2.setFont(u8g2_font_6x10_tf);
+    const SensorReading& reading = sensorLogger.latest();
 
     char sensorLine[32];
-    if (aht20Ready) {
-      snprintf(sensorLine, sizeof(sensorLine), "T:%5.1fC H:%5.1f%%", temperature, humidity);
-    } else {
-      snprintf(sensorLine, sizeof(sensorLine), "AHT20: error");
-    }
+    snprintf(sensorLine, sizeof(sensorLine), "T:%5.1fC H:%5.1f%%",
+      reading.temperature, reading.humidity);
     u8g2.drawStr(0, 12, sensorLine);
 
-    if (bh1750Ready) {
-      snprintf(sensorLine, sizeof(sensorLine), "Light: %6.1f lx", illuminance);
-    } else {
-      snprintf(sensorLine, sizeof(sensorLine), "BH1750: error");
-    }
+    snprintf(sensorLine, sizeof(sensorLine), "Light: %6.1f lx", reading.illuminance);
     u8g2.drawStr(0, 30, sensorLine);
 
-    snprintf(sensorLine, sizeof(sensorLine), "Soil: %4d", soilMoisture);
+    snprintf(sensorLine, sizeof(sensorLine), "Soil: %4u", reading.soilMoisture);
     u8g2.drawStr(0, 48, sensorLine);
     u8g2.sendBuffer();
     return;
@@ -127,24 +110,6 @@ void connection_state_changed_callback(esp_a2d_connection_state_t state, void *)
   updateDisplay();
 }
 
-void updateSensorDisplay() {
-  sensors_event_t humidityEvent;
-  sensors_event_t temperatureEvent;
-
-  if (aht20Ready) {
-    aht20.getEvent(&humidityEvent, &temperatureEvent);
-    temperature = temperatureEvent.temperature;
-    humidity = humidityEvent.relative_humidity;
-  }
-
-  if (bh1750Ready) {
-    illuminance = bh1750.readLightLevel();
-  }
-
-  soilMoisture = analogRead(kSoilMoisturePin);
-  updateDisplay();
-}
-
 void setup() {
   Serial.begin(115200);
 
@@ -158,12 +123,8 @@ void setup() {
   u8g2.begin();
   u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
 
-  aht20Ready = aht20.begin();
-  bh1750Ready = bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
-  analogReadResolution(12);
-
-  updateSensorDisplay();
-  lastSensorUpdate = millis();
+  sensorLogger.begin(32, kBluetoothName);
+  updateDisplay();
 
   // I2S ピン設定 (BCK: 27, WS: 25, DOUT: 26)
   i2s_pin_config_t my_pin_config = {
@@ -187,10 +148,7 @@ void setup() {
 
 void loop() {
   neoPixelController.update();
-
-  unsigned long now = millis();
-  if (!bluetoothConnected && now - lastSensorUpdate >= kSensorUpdateIntervalMs) {
-    lastSensorUpdate = now;
-    updateSensorDisplay();
+  if (sensorLogger.update() && !bluetoothConnected) {
+    updateDisplay();
   }
 }
