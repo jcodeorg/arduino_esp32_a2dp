@@ -6,7 +6,7 @@ class BLECharacteristic;
 class BLEServer;
 
 struct SensorReading {
-  unsigned long timestamp;
+  int64_t timestamp;
   float temperature;
   float humidity;
   float illuminance;
@@ -21,6 +21,8 @@ public:
   bool update();
   const SensorReading& latest() const;
   bool hasReading() const;
+  size_t logCount() const;
+  bool getCurrentTime(char* buffer, size_t bufferSize) const;
 
 private:
   static constexpr unsigned long kMeasureIntervalMs = 3600000UL;
@@ -32,7 +34,7 @@ private:
   void sendNotification(const char* data);
   void sendLog();
   void clearLog();
-  unsigned long currentTimestamp() const;
+  int64_t currentTimestamp() const;
 
   BLEServer* server_ = nullptr;
   BLECharacteristic* txCharacteristic_ = nullptr;
@@ -42,7 +44,7 @@ private:
   size_t logCount_ = 0;
   uint8_t soilPin_ = 0;
   unsigned long lastMeasure_ = 0;
-  unsigned long epochOffset_ = 0;
+  int64_t epochOffset_ = 0;
   bool timeSynchronized_ = false;
   String bluetoothName_;
   String commandBuffer_;

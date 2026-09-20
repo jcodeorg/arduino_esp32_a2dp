@@ -12,11 +12,17 @@ namespace {
 constexpr char kNusServiceUuid[] = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E";
 constexpr char kNusRxUuid[] = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E";
 constexpr char kNusTxUuid[] = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
+constexpr int64_t kInitialYear = 1700;
+constexpr int64_t kSecondsPerDay = 86400;
 
 Adafruit_AHTX0 aht20;
 BH1750 bh1750;
 bool aht20Ready = false;
 bool bh1750Ready = false;
+
+bool isLeapYear(int year) {
+  return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+}
 }
 
 class SensorLoggerCallbacks : public BLECharacteristicCallbacks {
@@ -94,6 +100,47 @@ const SensorReading& SensorLogger::latest() const {
 
 bool SensorLogger::hasReading() const {
   return logCount_ != 0;
+}
+
+size_t SensorLogger::logCount() const {
+  return logCount_;
+}
+
+bool SensorLogger::getCurrentTime(char* buffer, size_t bufferSize) const {
+  if (bufferSize == 0) {
+    return false;
+  }
+
+  int64_t timestamp = currentTimestamp();
+  if (timeSynchronized_) {
+    time_t unixTimestamp = static_cast<time_t>(timestamp);
+    struct tm date;
+    localtime_r(&unixTimestamp, &date);
+    strftime(buffer, bufferSize, "%Y/%m/%d %H:%M:%S", &date);
+    return true;
+  }
+
+  int year = static_cast<int>(kInitialYear);
+  int month = 1;
+  int day = 1;
+  int64_t days = timestamp / kSecondsPerDay;
+  int seconds = static_cast<int>(timestamp % kSecondsPerDay);
+  while (days >= (isLeapYear(year) ? 366 : 365)) {
+    days -= isLeapYear(year) ? 366 : 365;
+    ++year;
+  }
+  const int daysInMonth[] = {
+    31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30,
+    31, 31, 30, 31, 30, 31
+  };
+  while (days >= daysInMonth[month - 1]) {
+    days -= daysInMonth[month - 1];
+    ++month;
+  }
+  day += static_cast<int>(days);
+  snprintf(buffer, bufferSize, "%04d/%02d/%02d %02d:%02d:%02d",
+    year, month, day, seconds / 3600, (seconds / 60) % 60, seconds % 60);
+  return true;
 }
 
 void SensorLogger::readAndStore() {
@@ -193,7 +240,7 @@ void SensorLogger::sendLog() {
     size_t logIndex = (logStart_ + index) % kMaxLogEntries;
     const SensorReading& reading = log_[logIndex];
     char line[128];
-    snprintf(line, sizeof(line), "%lu,%.2f,%.2f,%.2f,%u,%s\n",
+    snprintf(line, sizeof(line), "%lld,%.2f,%.2f,%.2f,%u,%s\n",
       reading.timestamp,
       reading.temperature,
       reading.humidity,
@@ -224,7 +271,7 @@ void SensorLogger::clearLog() {
   logCount_ = 0;
 }
 
-unsigned long SensorLogger::currentTimestamp() const {
-  unsigned long elapsedSeconds = millis() / 1000UL;
+int64_t SensorLogger::currentTimestamp() const {
+  int64_t elapsedSeconds = millis() / 1000UL;
   return timeSynchronized_ ? epochOffset_ + elapsedSeconds : elapsedSeconds;
 }

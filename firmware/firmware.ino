@@ -4,7 +4,7 @@
 #include "NeoPixelController.h"
 #include "SensorLogger.h"
 
-const char kBluetoothName[] = "BT_Speaker5.32";
+const char kBluetoothName[] = "BT_Speaker5.4";
 
 // I2C接続のOLED設定 (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
@@ -18,25 +18,37 @@ String currentTitle = "未接続";
 String currentArtist = "";
 int currentVolumePercent = 0; // 音量 (0 ~ 100%)
 bool bluetoothConnected = false;
+bool musicPlaying = false;
+unsigned long lastDisplayUpdate = 0;
 
 // 画面全体を再描画する関数
 void updateDisplay() {
   u8g2.clearBuffer();
 
-  if (!bluetoothConnected) {
+  if (!bluetoothConnected || !musicPlaying) {
     u8g2.setFont(u8g2_font_6x10_tf);
     const SensorReading& reading = sensorLogger.latest();
 
     char sensorLine[32];
+    char timeLine[24];
+    if (sensorLogger.getCurrentTime(timeLine, sizeof(timeLine))) {
+      u8g2.drawStr(0, 9, timeLine);
+    } else {
+      u8g2.drawStr(0, 9, "RTC: --/--/-- --:--:--");
+    }
+
+    snprintf(sensorLine, sizeof(sensorLine), "Log: %u", static_cast<unsigned int>(sensorLogger.logCount()));
+    u8g2.drawStr(0, 20, sensorLine);
+
     snprintf(sensorLine, sizeof(sensorLine), "T:%5.1fC H:%5.1f%%",
       reading.temperature, reading.humidity);
-    u8g2.drawStr(0, 12, sensorLine);
+    u8g2.drawStr(0, 32, sensorLine);
 
     snprintf(sensorLine, sizeof(sensorLine), "Light: %6.1f lx", reading.illuminance);
-    u8g2.drawStr(0, 30, sensorLine);
+    u8g2.drawStr(0, 44, sensorLine);
 
     snprintf(sensorLine, sizeof(sensorLine), "Soil: %4u", reading.soilMoisture);
-    u8g2.drawStr(0, 48, sensorLine);
+    u8g2.drawStr(0, 56, sensorLine);
     u8g2.sendBuffer();
     return;
   }
@@ -88,7 +100,7 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
     updated = true;
   }
 
-  if (updated && bluetoothConnected) {
+  if (updated && bluetoothConnected && musicPlaying) {
     updateDisplay();
   }
 }
@@ -96,17 +108,22 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
 // 音量変更時のコールバック関数
 void volume_changed_callback(int volume) {
   currentVolumePercent = map(volume, 0, 127, 0, 100);
-  if (bluetoothConnected) {
+  if (bluetoothConnected && musicPlaying) {
     updateDisplay();
   }
 }
 
 void audio_state_changed_callback(esp_a2d_audio_state_t state, void *) {
-  neoPixelController.setPlaying(state == ESP_A2D_AUDIO_STATE_STARTED);
+  musicPlaying = state == ESP_A2D_AUDIO_STATE_STARTED;
+  neoPixelController.setPlaying(musicPlaying);
+  updateDisplay();
 }
 
 void connection_state_changed_callback(esp_a2d_connection_state_t state, void *) {
   bluetoothConnected = state == ESP_A2D_CONNECTION_STATE_CONNECTED;
+  if (!bluetoothConnected) {
+    musicPlaying = false;
+  }
   updateDisplay();
 }
 
@@ -125,6 +142,7 @@ void setup() {
 
   sensorLogger.begin(32);
   updateDisplay();
+  lastDisplayUpdate = millis();
 
   // I2S ピン設定 (BCK: 27, WS: 25, DOUT: 26)
   i2s_pin_config_t my_pin_config = {
@@ -148,7 +166,11 @@ void setup() {
 
 void loop() {
   neoPixelController.update();
-  if (sensorLogger.update() && !bluetoothConnected) {
+  bool newReading = sensorLogger.update();
+  unsigned long now = millis();
+  if ((!bluetoothConnected || !musicPlaying)
+      && (newReading || now - lastDisplayUpdate >= 1000UL)) {
+    lastDisplayUpdate = now;
     updateDisplay();
   }
 }
