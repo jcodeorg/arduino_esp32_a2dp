@@ -1,24 +1,62 @@
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
 #include <U8g2lib.h>
+#include <Adafruit_AHTX0.h>
+#include <BH1750.h>
 #include "NeoPixelController.h"
 
-const char kBluetoothName[] = "BT_Speaker5.31";
+const char kBluetoothName[] = "BT_Speaker5.32";
+constexpr uint8_t kSoilMoisturePin = 32;
+constexpr unsigned long kSensorUpdateIntervalMs = 1000;
 
 // I2C接続のOLED設定 (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 BluetoothA2DPSink a2dp_sink;
 NeoPixelController neoPixelController;
+Adafruit_AHTX0 aht20;
+BH1750 bh1750;
 
 // 表示用変数
 String currentTitle = "未接続";
 String currentArtist = "";
 int currentVolumePercent = 0; // 音量 (0 ~ 100%)
+bool bluetoothConnected = false;
+bool aht20Ready = false;
+bool bh1750Ready = false;
+unsigned long lastSensorUpdate = 0;
+float temperature = 0.0f;
+float humidity = 0.0f;
+float illuminance = 0.0f;
+int soilMoisture = 0;
 
 // 画面全体を再描画する関数
 void updateDisplay() {
   u8g2.clearBuffer();
+
+  if (!bluetoothConnected) {
+    u8g2.setFont(u8g2_font_6x10_tf);
+
+    char sensorLine[32];
+    if (aht20Ready) {
+      snprintf(sensorLine, sizeof(sensorLine), "T:%5.1fC H:%5.1f%%", temperature, humidity);
+    } else {
+      snprintf(sensorLine, sizeof(sensorLine), "AHT20: error");
+    }
+    u8g2.drawStr(0, 12, sensorLine);
+
+    if (bh1750Ready) {
+      snprintf(sensorLine, sizeof(sensorLine), "Light: %6.1f lx", illuminance);
+    } else {
+      snprintf(sensorLine, sizeof(sensorLine), "BH1750: error");
+    }
+    u8g2.drawStr(0, 30, sensorLine);
+
+    snprintf(sensorLine, sizeof(sensorLine), "Soil: %4d", soilMoisture);
+    u8g2.drawStr(0, 48, sensorLine);
+    u8g2.sendBuffer();
+    return;
+  }
   
   // --------------------------------------------------
   // 1. 音量表示エリア（最上部：英数フォント）
@@ -67,7 +105,7 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
     updated = true;
   }
 
-  if (updated) {
+  if (updated && bluetoothConnected) {
     updateDisplay();
   }
 }
@@ -75,11 +113,36 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
 // 音量変更時のコールバック関数
 void volume_changed_callback(int volume) {
   currentVolumePercent = map(volume, 0, 127, 0, 100);
-  updateDisplay();
+  if (bluetoothConnected) {
+    updateDisplay();
+  }
 }
 
 void audio_state_changed_callback(esp_a2d_audio_state_t state, void *) {
   neoPixelController.setPlaying(state == ESP_A2D_AUDIO_STATE_STARTED);
+}
+
+void connection_state_changed_callback(esp_a2d_connection_state_t state, void *) {
+  bluetoothConnected = state == ESP_A2D_CONNECTION_STATE_CONNECTED;
+  updateDisplay();
+}
+
+void updateSensorDisplay() {
+  sensors_event_t humidityEvent;
+  sensors_event_t temperatureEvent;
+
+  if (aht20Ready) {
+    aht20.getEvent(&humidityEvent, &temperatureEvent);
+    temperature = temperatureEvent.temperature;
+    humidity = humidityEvent.relative_humidity;
+  }
+
+  if (bh1750Ready) {
+    illuminance = bh1750.readLightLevel();
+  }
+
+  soilMoisture = analogRead(kSoilMoisturePin);
+  updateDisplay();
 }
 
 void setup() {
@@ -95,13 +158,12 @@ void setup() {
   u8g2.begin();
   u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
 
-  // 初期画面
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_unifont_t_japanese1);
-  u8g2.drawUTF8(0, 20, kBluetoothName);
-  u8g2.setFont(u8g2_font_6x10_tf);
-  u8g2.drawStr(0, 40, "Ready...");
-  u8g2.sendBuffer();
+  aht20Ready = aht20.begin();
+  bh1750Ready = bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
+  analogReadResolution(12);
+
+  updateSensorDisplay();
+  lastSensorUpdate = millis();
 
   // I2S ピン設定 (BCK: 27, WS: 25, DOUT: 26)
   i2s_pin_config_t my_pin_config = {
@@ -117,6 +179,7 @@ void setup() {
   a2dp_sink.set_avrc_metadata_callback(avrc_metadata_callback);
   a2dp_sink.set_on_volumechange(volume_changed_callback);
   a2dp_sink.set_on_audio_state_changed(audio_state_changed_callback);
+  a2dp_sink.set_on_connection_state_changed(connection_state_changed_callback);
 
   // Bluetooth起動
   a2dp_sink.start(kBluetoothName);
@@ -124,4 +187,10 @@ void setup() {
 
 void loop() {
   neoPixelController.update();
+
+  unsigned long now = millis();
+  if (!bluetoothConnected && now - lastSensorUpdate >= kSensorUpdateIntervalMs) {
+    lastSensorUpdate = now;
+    updateSensorDisplay();
+  }
 }
