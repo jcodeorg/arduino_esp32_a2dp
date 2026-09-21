@@ -45,6 +45,7 @@ jobs:
         run: |
           arduino-cli lib install "Adafruit AHTX0"
           arduino-cli lib install "BH1750"
+          arduino-cli lib install "Adafruit NeoPixel"
 
       # コンパイル実行 (output-dir を指定して構成ファイルを確実に生成)
       - name: Compile Sketch
