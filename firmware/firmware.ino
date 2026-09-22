@@ -211,8 +211,10 @@ void setup() {
   neoPixelController.begin(18);
 
   // I2Cの配線を設定します。Wire.begin(SDA, SCL)の順です。
-  Wire.begin(21, 22);
+  // Wire.begin(21, 22);
+  Wire.begin(19, 5); // SDA=19, SCL=5 開発用ボードの配線
   
+
   // OLEDを使える状態にします。
   u8g2.begin();
   u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
