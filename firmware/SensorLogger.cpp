@@ -6,6 +6,7 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
+#include <Wire.h>
 #include <time.h>
 
 namespace {
@@ -23,6 +24,11 @@ Adafruit_AHTX0 aht20;
 BH1750 bh1750;
 bool aht20Ready = false;
 bool bh1750Ready = false;
+
+bool isI2cDevicePresent(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
+}
 
 bool isLeapYear(int year) {
   // 4年ごと。ただし100年ごとは除き、400年ごとはうるう年です。
@@ -72,9 +78,14 @@ void SensorLogger::begin(uint8_t soilPin) {
   pinMode(soilPin_, INPUT);
   analogReadResolution(12);
 
-  // センサーの初期化に成功したかを保存します。
-  aht20Ready = aht20.begin();
-  bh1750Ready = bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
+  // センサーが接続されているときだけ初期化します。
+  // 未接続時にライブラリへアクセスすると、不要なI2Cエラーや待ち時間が発生します。
+  if (isI2cDevicePresent(0x38)) {
+    aht20Ready = aht20.begin();
+  }
+  if (isI2cDevicePresent(0x23)) {
+    bh1750Ready = bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
+  }
 
   // ESP32固有の番号を名前に加え、同じ名前の機器と区別します。
   uint64_t mac = ESP.getEfuseMac();

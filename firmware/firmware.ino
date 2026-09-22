@@ -23,6 +23,12 @@ int currentVolumePercent = 0; // 音量（0〜100%）
 bool bluetoothConnected = false;
 bool musicPlaying = false;
 unsigned long lastDisplayUpdate = 0;
+bool oledReady = false;
+
+bool isI2cDevicePresent(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
+}
 
 // UTF-8の文字列を1文字ずつ描画します。
 // フォントにない文字は、フォントに頼らず四角形を直接描きます。
@@ -93,6 +99,10 @@ void drawUtf8WithTofu(uint8_t x, uint8_t y, const String& text) {
 
 // OLEDの内容を現在の状態に合わせて描き直します。
 void updateDisplay() {
+  if (!oledReady) {
+    return;
+  }
+
   u8g2.clearBuffer();
 
   // 音楽を再生していないときは、センサーの情報を表示します。
@@ -213,11 +223,21 @@ void setup() {
   // I2Cの配線を設定します。Wire.begin(SDA, SCL)の順です。
   // Wire.begin(21, 22);
   Wire.begin(19, 5); // SDA=19, SCL=5 開発用ボードの配線
+  Wire.setTimeOut(50);
   
-
-  // OLEDを使える状態にします。
-  u8g2.begin();
-  u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
+  // OLEDが接続されているときだけ初期化と描画を行います。
+  uint8_t oledAddress = 0;
+  if (isI2cDevicePresent(0x3C)) {
+    oledAddress = 0x3C;
+  } else if (isI2cDevicePresent(0x3D)) {
+    oledAddress = 0x3D;
+  }
+  if (oledAddress != 0) {
+    u8g2.setI2CAddress(oledAddress << 1);
+    u8g2.begin();
+    u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
+    oledReady = true;
+  }
 
   sensorLogger.begin(32);
   updateDisplay();
