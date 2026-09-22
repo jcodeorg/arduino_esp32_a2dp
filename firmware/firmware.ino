@@ -221,8 +221,8 @@ void setup() {
   neoPixelController.begin(18);
 
   // I2Cの配線を設定します。Wire.begin(SDA, SCL)の順です。
-  // Wire.begin(21, 22);
-  Wire.begin(19, 5); // SDA=19, SCL=5 開発用ボードの配線
+  Wire.begin(21, 22);
+  // Wire.begin(19, 5); // SDA=19, SCL=5 開発用ボードの配線
   Wire.setTimeOut(50);
   
   // OLEDが接続されているときだけ初期化と描画を行います。
