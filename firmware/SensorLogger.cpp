@@ -58,6 +58,7 @@ public:
   void onConnect(BLEServer*) override {
     // 接続中は、画面に接続中であることを表示できます。
     logger_->bluetoothConnected_ = true;
+    Serial.println("[INFO] BLE client connected");
   }
 
   void onDisconnect(BLEServer* server) override {
@@ -66,6 +67,7 @@ public:
     logger_->commandBuffer_ = "";
     logger_->lastAdvertise_ = millis();
     server->startAdvertising();
+    Serial.println("[WARNING] BLE client disconnected; advertising restarted");
   }
 
 private:
@@ -82,9 +84,19 @@ void SensorLogger::begin(uint8_t soilPin) {
   // 未接続時にライブラリへアクセスすると、不要なI2Cエラーや待ち時間が発生します。
   if (isI2cDevicePresent(0x38)) {
     aht20Ready = aht20.begin();
+    if (!aht20Ready) {
+      Serial.println("[ERROR] AHT20 initialization failed");
+    }
+  } else {
+    Serial.println("[WARNING] AHT20 not detected at 0x38");
   }
   if (isI2cDevicePresent(0x23)) {
     bh1750Ready = bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
+    if (!bh1750Ready) {
+      Serial.println("[ERROR] BH1750 initialization failed");
+    }
+  } else {
+    Serial.println("[WARNING] BH1750 not detected at 0x23");
   }
 
   // ESP32固有の番号を名前に加え、同じ名前の機器と区別します。
@@ -93,6 +105,7 @@ void SensorLogger::begin(uint8_t soilPin) {
   snprintf(name, sizeof(name), "%s-%05llX", kBleDeviceNamePrefix, mac & 0xFFFFF);
   bluetoothName_ = name;
   BLEDevice::init(bluetoothName_.c_str());
+  Serial.printf("[INFO] BLE initialized as '%s'\n", bluetoothName_.c_str());
 
   // BLEサーバーと、センサー通信用のサービスを作ります。
   server_ = BLEDevice::createServer();
@@ -119,6 +132,7 @@ void SensorLogger::begin(uint8_t soilPin) {
   advertising->setMinPreferred(0x06);
   advertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
+  Serial.println("[INFO] BLE advertising started");
 
   // 起動直後にも1回計測して、画面に値を表示できるようにします。
   readAndStore();
@@ -281,6 +295,8 @@ void SensorLogger::receiveBluetoothData(const String& data) {
       commandBuffer_ += character;
     } else if (commandBuffer_.length() < 64) {
       commandBuffer_ += character;
+    } else if (commandBuffer_.length() == 64) {
+      Serial.println("[ERROR] BLE command is too long and was truncated");
     }
   }
 }
@@ -340,9 +356,12 @@ void SensorLogger::processCommand(const String& command) {
       txCharacteristic_->setValue("OK_TIME\n");
       txCharacteristic_->notify();
     } else {
+      Serial.printf("[ERROR] Invalid TIME command: %s\n", command.c_str());
       txCharacteristic_->setValue("ERROR_TIME\n");
       txCharacteristic_->notify();
     }
+  } else {
+    Serial.printf("[WARNING] Unknown BLE command: %s\n", command.c_str());
   }
 }
 

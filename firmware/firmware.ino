@@ -183,6 +183,8 @@ void avrc_metadata_callback(uint8_t id, const uint8_t *text) {
   } else if (id == ESP_AVRC_MD_ATTR_ARTIST) {
     currentArtist = (char*)text;
     updated = true;
+  } else {
+    Serial.printf("[WARNING] Unsupported AVRCP metadata id: %u\n", id);
   }
 
   if (updated && bluetoothConnected && musicPlaying) {
@@ -201,6 +203,8 @@ void volume_changed_callback(int volume) {
 void audio_state_changed_callback(esp_a2d_audio_state_t state, void *) {
   // 音声が流れ始めたかどうかを保存し、LEDと画面を更新します。
   musicPlaying = state == ESP_A2D_AUDIO_STATE_STARTED;
+  Serial.printf("[INFO] Audio state changed: %d (playing=%s)\n",
+    state, musicPlaying ? "yes" : "no");
   neoPixelController.setPlaying(musicPlaying);
   updateDisplay();
 }
@@ -208,6 +212,8 @@ void audio_state_changed_callback(esp_a2d_audio_state_t state, void *) {
 void connection_state_changed_callback(esp_a2d_connection_state_t state, void *) {
   // スマートフォンとの接続状態を保存します。
   bluetoothConnected = state == ESP_A2D_CONNECTION_STATE_CONNECTED;
+  Serial.printf("[INFO] A2DP connection state changed: %d (connected=%s)\n",
+    state, bluetoothConnected ? "yes" : "no");
   if (!bluetoothConnected) {
     musicPlaying = false;
   }
@@ -217,6 +223,7 @@ void connection_state_changed_callback(esp_a2d_connection_state_t state, void *)
 void setup() {
   // setupは、電源を入れた直後に1回だけ実行されます。
   Serial.begin(115200);
+  Serial.println("[INFO] Firmware starting");
 
   neoPixelController.begin(18);
 
@@ -237,6 +244,9 @@ void setup() {
     u8g2.begin();
     u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
     oledReady = true;
+    Serial.printf("[INFO] OLED detected at 0x%02X\n", oledAddress);
+  } else {
+    Serial.println("[WARNING] OLED not detected at 0x3C or 0x3D");
   }
 
   sensorLogger.begin(32);
@@ -262,6 +272,7 @@ void setup() {
 
   // Bluetoothスピーカーとして起動します。
   a2dp_sink.start(kA2dpDeviceName);
+  Serial.printf("[INFO] A2DP started as '%s'\n", kA2dpDeviceName);
 }
 
 void loop() {
