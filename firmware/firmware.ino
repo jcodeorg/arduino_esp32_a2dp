@@ -6,7 +6,7 @@
 #include "SensorLogger.h"
 
 // スマートフォンのBluetooth一覧に表示されるスピーカー名です。
-const char kA2dpDeviceName[] = "BT_Speaker5.5";
+const char kA2dpDeviceName[] = "BT_Speaker5.6";
 
 // I2Cで接続した128x64ドットのOLED画面です。
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
