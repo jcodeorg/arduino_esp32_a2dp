@@ -7,6 +7,11 @@
 
 // スマートフォンのBluetooth一覧に表示されるスピーカー名です。
 const char kA2dpDeviceName[] = "BT_Speaker5.6";
+// I2C接続のSDA/SCLピンです。配線に合わせてここだけ変更します。
+// 通常基板：SDA=21, SCL=22
+// 開発用基板：SDA=19, SCL=5
+const uint8_t kI2cSdaPin = 21;
+const uint8_t kI2cSclPin = 22;
 
 // I2Cで接続した128x64ドットのOLED画面です。
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
@@ -228,8 +233,10 @@ void setup() {
   neoPixelController.begin(18);
 
   // I2Cの配線を設定します。Wire.begin(SDA, SCL)の順です。
-  Wire.begin(21, 22);
-  // Wire.begin(19, 5); // SDA=19, SCL=5 開発用ボードの配線
+  // OLED未接続時もSDA/SCLが浮かないようにします。
+  pinMode(kI2cSdaPin, INPUT_PULLUP);
+  pinMode(kI2cSclPin, INPUT_PULLUP);
+  Wire.begin(kI2cSdaPin, kI2cSclPin);
   Wire.setTimeOut(50);
   
   // OLEDが接続されているときだけ初期化と描画を行います。
