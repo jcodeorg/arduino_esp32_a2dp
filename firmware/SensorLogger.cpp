@@ -74,65 +74,70 @@ private:
   SensorLogger* logger_;
 };
 
-void SensorLogger::begin(uint8_t soilPin) {
+void SensorLogger::begin(uint8_t soilPin, bool i2cConnected, bool bleDataConnected) {
   // センサーとBLE通信を使い始めるための初期設定です。
   soilPin_ = soilPin;
+  bleDataConnected_ = bleDataConnected;
   pinMode(soilPin_, INPUT);
   analogReadResolution(12);
 
   // センサーが接続されているときだけ初期化します。
   // 未接続時にライブラリへアクセスすると、不要なI2Cエラーや待ち時間が発生します。
-  if (isI2cDevicePresent(0x38)) {
-    aht20Ready = aht20.begin();
-    if (!aht20Ready) {
-      Serial.println("[ERROR] AHT20 initialization failed");
+  if (i2cConnected) {
+    if (isI2cDevicePresent(0x38)) {
+      aht20Ready = aht20.begin();
+      if (!aht20Ready) {
+        Serial.println("[ERROR] AHT20 initialization failed");
+      }
+    } else {
+      Serial.println("[WARNING] AHT20 not detected at 0x38");
     }
-  } else {
-    Serial.println("[WARNING] AHT20 not detected at 0x38");
-  }
-  if (isI2cDevicePresent(0x23)) {
-    bh1750Ready = bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
-    if (!bh1750Ready) {
-      Serial.println("[ERROR] BH1750 initialization failed");
+    if (isI2cDevicePresent(0x23)) {
+      bh1750Ready = bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
+      if (!bh1750Ready) {
+        Serial.println("[ERROR] BH1750 initialization failed");
+      }
+    } else {
+      Serial.println("[WARNING] BH1750 not detected at 0x23");
     }
-  } else {
-    Serial.println("[WARNING] BH1750 not detected at 0x23");
   }
 
-  // ESP32固有の番号を名前に加え、同じ名前の機器と区別します。
-  uint64_t mac = ESP.getEfuseMac();
-  char name[14];
-  snprintf(name, sizeof(name), "%s-%05llX", kBleDeviceNamePrefix, mac & 0xFFFFF);
-  bluetoothName_ = name;
-  BLEDevice::init(bluetoothName_.c_str());
-  Serial.printf("[INFO] BLE initialized as '%s'\n", bluetoothName_.c_str());
+  if (bleDataConnected_) {
+    // ESP32固有の番号を名前に加え、同じ名前の機器と区別します。
+    uint64_t mac = ESP.getEfuseMac();
+    char name[14];
+    snprintf(name, sizeof(name), "%s-%05llX", kBleDeviceNamePrefix, mac & 0xFFFFF);
+    bluetoothName_ = name;
+    BLEDevice::init(bluetoothName_.c_str());
+    Serial.printf("[INFO] BLE initialized as '%s'\n", bluetoothName_.c_str());
 
-  // BLEサーバーと、センサー通信用のサービスを作ります。
-  server_ = BLEDevice::createServer();
-  server_->setCallbacks(new SensorLoggerServerCallbacks(this));
-  BLEService* service = server_->createService(kNusServiceUuid);
-  // RXはアプリからESP32へ命令を送る通路です。
-  BLECharacteristic* rxCharacteristic = service->createCharacteristic(
-    kNusRxUuid, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
-  rxCharacteristic->setCallbacks(new SensorLoggerCallbacks(this));
-  // TXはESP32からアプリへログを送る通路です。
-  txCharacteristic_ = service->createCharacteristic(
-    kNusTxUuid, BLECharacteristic::PROPERTY_NOTIFY);
-  txCharacteristic_->addDescriptor(new BLE2902());
-  service->start();
+    // BLEサーバーと、センサー通信用のサービスを作ります。
+    server_ = BLEDevice::createServer();
+    server_->setCallbacks(new SensorLoggerServerCallbacks(this));
+    BLEService* service = server_->createService(kNusServiceUuid);
+    // RXはアプリからESP32へ命令を送る通路です。
+    BLECharacteristic* rxCharacteristic = service->createCharacteristic(
+      kNusRxUuid, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+    rxCharacteristic->setCallbacks(new SensorLoggerCallbacks(this));
+    // TXはESP32からアプリへログを送る通路です。
+    txCharacteristic_ = service->createCharacteristic(
+      kNusTxUuid, BLECharacteristic::PROPERTY_NOTIFY);
+    txCharacteristic_->addDescriptor(new BLE2902());
+    service->start();
 
-  // BLE広告は「この機器が近くにいます」と周囲へ知らせる仕組みです。
-  BLEAdvertising* advertising = BLEDevice::getAdvertising();
-  advertising->addServiceUUID(kNusServiceUuid);
-  advertising->setScanResponse(true);
-  // A2DP開始後に共通のBluetooth名が変わっても、BLE名を返せるようにします。
-  BLEAdvertisementData scanResponseData;
-  scanResponseData.setName(bluetoothName_.c_str());
-  advertising->setScanResponseData(scanResponseData);
-  advertising->setMinPreferred(0x06);
-  advertising->setMinPreferred(0x12);
-  BLEDevice::startAdvertising();
-  Serial.println("[INFO] BLE advertising started");
+    // BLE広告は「この機器が近くにいます」と周囲へ知らせる仕組みです。
+    BLEAdvertising* advertising = BLEDevice::getAdvertising();
+    advertising->addServiceUUID(kNusServiceUuid);
+    advertising->setScanResponse(true);
+    // A2DP開始後に共通のBluetooth名が変わっても、BLE名を返せるようにします。
+    BLEAdvertisementData scanResponseData;
+    scanResponseData.setName(bluetoothName_.c_str());
+    advertising->setScanResponseData(scanResponseData);
+    advertising->setMinPreferred(0x06);
+    advertising->setMinPreferred(0x12);
+    BLEDevice::startAdvertising();
+    Serial.println("[INFO] BLE advertising started");
+  }
 
   // 起動直後にも1回計測して、画面に値を表示できるようにします。
   readAndStore();
@@ -142,10 +147,13 @@ void SensorLogger::begin(uint8_t soilPin) {
 
 bool SensorLogger::update() {
   // loopから繰り返し呼ばれ、通信と定期計測を担当します。
-  processBluetooth();
+  if (bleDataConnected_) {
+    processBluetooth();
+  }
 
   unsigned long now = millis();
-  if (!bluetoothConnected_ && now - lastAdvertise_ >= kAdvertiseRetryIntervalMs) {
+  if (bleDataConnected_ && !bluetoothConnected_
+      && now - lastAdvertise_ >= kAdvertiseRetryIntervalMs) {
     // 接続されていなければ、定期的にBLE広告を出し直します。
     lastAdvertise_ = now;
     BLEDevice::startAdvertising();
@@ -288,6 +296,10 @@ void SensorLogger::processBluetooth() {
 }
 
 void SensorLogger::receiveBluetoothData(const String& data) {
+  if (!bleDataConnected_) {
+    return;
+  }
+
   // BLEで届いた文字を命令バッファへ追加します。
   for (size_t index = 0; index < data.length(); ++index) {
     char character = data[index];
@@ -320,6 +332,10 @@ void SensorLogger::applyHistoricalTimeAdjustment(int64_t epoch) {
 }
 
 void SensorLogger::processCommand(const String& command) {
+  if (!bleDataConnected_ || txCharacteristic_ == nullptr) {
+    return;
+  }
+
   // アプリから届いた命令を判定します。
   if (command == "GET_LOG") {
     // 保存済みのログを順番に送ります。
@@ -366,6 +382,10 @@ void SensorLogger::processCommand(const String& command) {
 }
 
 void SensorLogger::sendLog() {
+  if (!bleDataConnected_ || txCharacteristic_ == nullptr) {
+    return;
+  }
+
   // 保存したログを1行ずつ作り、BLE通知で送ります。
   for (size_t index = 0; index < logCount_; ++index) {
     size_t logIndex = (logStart_ + index) % kMaxLogEntries;
@@ -390,6 +410,10 @@ void SensorLogger::sendLog() {
 }
 
 void SensorLogger::sendNotification(const char* data) {
+  if (!bleDataConnected_ || txCharacteristic_ == nullptr) {
+    return;
+  }
+
   // BLE通知には一度に送れる長さの制限があるため、短く分割します。
   constexpr size_t kNotificationSize = 20;
   uint8_t notification[kNotificationSize];

@@ -1,3 +1,10 @@
+// I2C機器（OLED・センサー）を接続していない場合は false にします。
+const bool kI2cConnected = true; // I2C機器が接続されていない場合は false にします。
+// BLEでのセンサーデータ送受信を使わない場合は false にします。
+const bool kBleDataConnected = true; // BLEでのセンサーデータ送受信を使わない場合は false にします。
+// NeoPixelの接続ピンです。未接続の場合は -1 にすると一切使用しません。
+const int kNeoPixelPin = 18;  // 使用しない場合は -1 に、通常は 18番ピンに接続します。
+
 // A2DPは、スマートフォンから音楽を受信するBluetoothの仕組みです。
 #include "BluetoothA2DPSink.h"
 #include <Wire.h>
@@ -6,7 +13,7 @@
 #include "SensorLogger.h"
 
 // スマートフォンのBluetooth一覧に表示されるスピーカー名です。
-const char kA2dpDeviceName[] = "BT_Speaker5.6";
+const char kA2dpDeviceName[] = "BT_Speaker5.7";
 // I2C接続のSDA/SCLピンです。配線に合わせてここだけ変更します。
 // 通常基板：SDA=21, SCL=22
 // 開発用基板：SDA=19, SCL=5
@@ -210,7 +217,9 @@ void audio_state_changed_callback(esp_a2d_audio_state_t state, void *) {
   musicPlaying = state == ESP_A2D_AUDIO_STATE_STARTED;
   Serial.printf("[INFO] Audio state changed: %d (playing=%s)\n",
     state, musicPlaying ? "yes" : "no");
-  neoPixelController.setPlaying(musicPlaying);
+  if (kNeoPixelPin >= 0) {
+    neoPixelController.setPlaying(musicPlaying);
+  }
   updateDisplay();
 }
 
@@ -230,33 +239,37 @@ void setup() {
   Serial.begin(115200);
   Serial.println("[INFO] Firmware starting");
 
-  neoPixelController.begin(18);
-
-  // I2Cの配線を設定します。Wire.begin(SDA, SCL)の順です。
-  // OLED未接続時もSDA/SCLが浮かないようにします。
-  pinMode(kI2cSdaPin, INPUT_PULLUP);
-  pinMode(kI2cSclPin, INPUT_PULLUP);
-  Wire.begin(kI2cSdaPin, kI2cSclPin);
-  Wire.setTimeOut(50);
-  
-  // OLEDが接続されているときだけ初期化と描画を行います。
-  uint8_t oledAddress = 0;
-  if (isI2cDevicePresent(0x3C)) {
-    oledAddress = 0x3C;
-  } else if (isI2cDevicePresent(0x3D)) {
-    oledAddress = 0x3D;
-  }
-  if (oledAddress != 0) {
-    u8g2.setI2CAddress(oledAddress << 1);
-    u8g2.begin();
-    u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
-    oledReady = true;
-    Serial.printf("[INFO] OLED detected at 0x%02X\n", oledAddress);
-  } else {
-    Serial.println("[WARNING] OLED not detected at 0x3C or 0x3D");
+  if (kNeoPixelPin >= 0) {
+    neoPixelController.begin(static_cast<uint8_t>(kNeoPixelPin));
   }
 
-  sensorLogger.begin(32);
+  if (kI2cConnected) {
+    // I2Cの配線を設定します。Wire.begin(SDA, SCL)の順です。
+    // OLED未接続時もSDA/SCLが浮かないようにします。
+    pinMode(kI2cSdaPin, INPUT_PULLUP);
+    pinMode(kI2cSclPin, INPUT_PULLUP);
+    Wire.begin(kI2cSdaPin, kI2cSclPin);
+    Wire.setTimeOut(50);
+
+    // OLEDが接続されているときだけ初期化と描画を行います。
+    uint8_t oledAddress = 0;
+    if (isI2cDevicePresent(0x3C)) {
+      oledAddress = 0x3C;
+    } else if (isI2cDevicePresent(0x3D)) {
+      oledAddress = 0x3D;
+    }
+    if (oledAddress != 0) {
+      u8g2.setI2CAddress(oledAddress << 1);
+      u8g2.begin();
+      u8g2.enableUTF8Print(); // UTF-8（日本語）描画を有効化
+      oledReady = true;
+      Serial.printf("[INFO] OLED detected at 0x%02X\n", oledAddress);
+    } else {
+      Serial.println("[WARNING] OLED not detected at 0x3C or 0x3D");
+    }
+  }
+
+  sensorLogger.begin(32, kI2cConnected, kBleDataConnected);
   updateDisplay();
   lastDisplayUpdate = millis();
 
@@ -284,7 +297,9 @@ void setup() {
 
 void loop() {
   // loopは何度も繰り返し実行されます。
-  neoPixelController.update();
+  if (kNeoPixelPin >= 0) {
+    neoPixelController.update();
+  }
   bool newReading = sensorLogger.update();
   unsigned long now = millis();
   if ((!bluetoothConnected || !musicPlaying)

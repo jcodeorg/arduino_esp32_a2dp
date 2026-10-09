@@ -18,7 +18,7 @@ public:
   static constexpr size_t kMaxLogEntries = 2000;
 
   // センサー、BLE、保存データを使い始める準備をします。
-  void begin(uint8_t soilPin);
+  void begin(uint8_t soilPin, bool i2cConnected, bool bleDataConnected);
   // BLEの受信と、一定時間ごとの計測を行います。
   bool update();
   // センサーを読み取り、画面表示用の最新値を更新します。
@@ -69,6 +69,7 @@ private:
   bool timeSynchronized_ = false; // 時刻合わせが済んだか
   bool historicalAdjustmentApplied_ = false; // 過去ログの補正が済んだか
   bool bluetoothConnected_ = false; // BLE接続中か
+  bool bleDataConnected_ = false; // BLEデータ送受信を使うか
   String bluetoothName_; // BLEに表示する名前
   String commandBuffer_; // BLEから受け取った未処理の文字
 
